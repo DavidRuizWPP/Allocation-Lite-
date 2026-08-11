@@ -10,7 +10,45 @@ import plotly.express as px
 
 st.set_page_config(layout="wide", page_title="Inteligencia Territorial - Smart Fit")
 
-st.title("📍 Inteligencia Territorial: Estrategia de Presupuesto")
+# --- 1. Control de Acceso por Contraseña Corregido ---
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+
+if not st.session_state["authenticated"]:
+    st.title("📍 Inteligencia Territorial: Estrategia de Presupuesto")
+    st.subheader("🔒 Acceso Restringido")
+    
+    with st.form("login_form"):
+        pwd_input = st.text_input("Ingresa el Código de Acceso:", type="password")
+        submit_button = st.form_submit_button("Ingresar")
+        
+        if submit_button:
+            if pwd_input == "SmarFit.2026":
+                st.session_state["authenticated"] = True
+                st.success("¡Acceso concedido!")
+                st.rerun()  # Recarga la app inmediatamente para mostrar el contenido
+            else:
+                st.error("🔑 Contraseña incorrecta. Inténtalo de nuevo.")
+                
+    st.stop()  # Detiene la ejecución para no mostrar nada del dashboard si no está autenticado
+
+# --- 2. Encabezado con Logos (Smart Fit a la Izquierda y WPP a la Derecha) ---
+header_col1, header_col2, header_col3 = st.columns([1, 4, 1])
+
+with header_col1:
+    try:
+        st.image("Logo_SmartFit.png", width=110)
+    except Exception:
+        pass  # Si la imagen no se encuentra en la carpeta local, no rompe la app
+
+with header_col2:
+    st.title("📍 Inteligencia Territorial: Estrategia de Presupuesto")
+
+with header_col3:
+    try:
+        st.image("Logo_WPP.png", width=150)
+    except Exception:
+        pass
 
 # Matriz de Presupuesto
 budget_matrix = pd.DataFrame({
@@ -26,6 +64,11 @@ with st.sidebar:
     st.header("Carga de Datos")
     file_aperturas = st.file_uploader("Subir 'UbicaciónAperturas.xlsx'", type=["xlsx"])
     file_existentes = st.file_uploader("Subir 'Analise - 469 unidades.xlsx'", type=["xlsx"])
+    
+    st.divider()
+    if st.button("🚪 Cerrar Sesión"):
+        st.session_state["authenticated"] = False
+        st.rerun()
 
 def clean_data(df):
     df.columns = df.columns.str.strip()
@@ -63,10 +106,8 @@ if file_aperturas and file_existentes:
         else:
             neigh_df = df_existentes.iloc[indices]
             st.write("### Sucursales Vecinas:")
-            # Mostramos la tabla de vecinos
             st.dataframe(neigh_df[['Sigla', 'Maturação', 'Tier']].reset_index(drop=True), use_container_width=True)
             
-            # Calcular distribución de maduración
             maturity_dist = neigh_df['Maturação'].value_counts(normalize=True).to_dict()
             st.info(f"Se encontraron {len(indices)} sucursales cercanas.")
         
