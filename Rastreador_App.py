@@ -15,7 +15,7 @@ if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
 
 if not st.session_state["authenticated"]:
-    st.title("📍 Inteligencia Territorial: Estrategia de Presupuesto")
+    st.title("📍 Geo Budget Allocation (Lite)")
     st.subheader("🔒 Acceso Restringido")
     
     with st.form("login_form"):
