@@ -42,7 +42,7 @@ with header_col1:
         pass  # Si la imagen no se encuentra en la carpeta local, no rompe la app
 
 with header_col2:
-    st.title("📍 Inteligencia Territorial: Estrategia de Presupuesto")
+    st.title("📍 Geo Budget Allocation (Lite)")
 
 with header_col3:
     try:
