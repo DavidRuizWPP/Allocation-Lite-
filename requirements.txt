@@ -5,4 +5,5 @@ scikit-learn
 folium
 streamlit-folium
 plotly
+scipy
 openpyxl
