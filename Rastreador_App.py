@@ -1,6 +1,8 @@
 # venv\Scripts\activate
-# streamlit run Rastreador_App.py
-
+# streamlit run LaunchAllocationEngine.py
+#---------------------------------------------------------------------------
+# Comienza la App
+#---------------------------------------------------------------------------
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -223,7 +225,6 @@ with tab_rastreador:
         
         col_b1, col_b2 = st.columns(2)
         with col_b1:
-            # Entrada de población introducida por el usuario
             poblacion_input = st.number_input(
                 "Población alrededor (dentro del radio seleccionado):", 
                 min_value=0.0, 
@@ -232,15 +233,10 @@ with tab_rastreador:
                 key=f"pob_{selected_branch_name}"
             )
         with col_b2:
-            # Conteo de vecinos calculado automáticamente por la app
             num_vecinos = len(indices)
             st.metric(label="Número de Vecinos (en el radio)", value=num_vecinos)
             
-        # Cálculo del Baseline Spend con la ecuación proporcionada
-        # Ecuación: Baseline Spend = 10409.182 + -0.00028 * Población + 59.35 * Vecinos
-        baseline_spend = 9006.42 + (-0.000087 * poblacion_input) + (63.6 * num_vecinos)
-        
-        # Mostrar el resultado destacado
+        baseline_spend = 9006.42 + (0.0031 * poblacion_input) + (63.6 * num_vecinos)
         st.markdown(f"### 💡 El Budget Sufficiency para **{selected_branch_name}** es : **${max(baseline_spend, 0.0):,.2f}** por mes")
 
     else:
@@ -512,7 +508,7 @@ with tab_optimizer:
     if uploaded_file is not None and params_clean:
         escenario = st.radio("Selecciona el tipo de optimización:", [
             "1. Presupuesto Libre (Maximizar KPI)", 
-            "2. Presupuestos Mínimos", 
+            "2. Presupuestos Mínimos y Máximos", 
             "3. Búsqueda de Objetivo"
         ])
         
@@ -591,21 +587,30 @@ with tab_optimizer:
                     
                     render_optimizer_charts(df_result_free)
 
-        elif escenario == "2. Presupuestos Mínimos":
-            st.subheader("Maximiza resultados asegurando una inversión mínima por Touchpoint.")
+        elif escenario == "2. Presupuestos Mínimos y Máximos":
+            st.subheader("Maximiza resultados asegurando una inversión mínima y un tope máximo por Touchpoint.")
             budget_cons = st.number_input("Presupuesto Total Disponible", value=100000.0, step=5000.0, key="budget_cons")
             
-            st.markdown("Ingresa la inversión mínima por plataforma:")
+            st.markdown("Ingresa la inversión **Mínima** y **Máxima** por plataforma:")
             min_spends = {}
+            max_spends = {}
+            
+            # Creamos columnas dobles para cada plataforma (Mínimo y Máximo)
             cols_cons = st.columns(len(params_clean))
             for idx, plat in enumerate(params_clean.keys()):
                 with cols_cons[idx]:
-                    min_spends[plat] = st.number_input(f"Mínimo {plat}", value=5000.0, step=1000.0)
+                    st.markdown(f"**{plat}**")
+                    min_spends[plat] = st.number_input(f"Mínimo {plat}", value=1000.0, step=500.0, key=f"min_{plat}")
+                    max_spends[plat] = st.number_input(f"Máximo {plat}", value=50000.0, step=5000.0, key=f"max_{plat}")
             
-            if st.button("Optimizar con Restricciones"):
+            if st.button("Optimizar con Restricciones (Min/Max)"):
                 suma_minimos = sum(min_spends.values())
+                suma_maximos = sum(max_spends.values())
+                
                 if suma_minimos > budget_cons:
-                    st.error("La suma de los mínimos es mayor al presupuesto total.")
+                    st.error(f"⚠️ La suma de los mínimos (${suma_minimos:,.2f}) es mayor al presupuesto total (${budget_cons:,.2f}).")
+                elif suma_maximos < budget_cons:
+                    st.error(f"⚠️ La suma de los máximos (${suma_maximos:,.2f}) es menor al presupuesto total (${budget_cons:,.2f}). Es imposible repartir el dinero.")
                 else:
                     plats_opt = list(params_clean.keys())
                     
@@ -615,9 +620,10 @@ with tab_optimizer:
                     def cons_cons(shares): 
                         return 1.0 - np.sum(shares)
                     
-                    bounds = [(min_spends[p] / budget_cons, 1.0) for p in plats_opt]
-                    presupuesto_sobrante = budget_cons - suma_minimos
+                    # Definición dinámica de bounds basados en los mínimos y máximos en dólares convertidos a shares (0 a 1)
+                    bounds = [(min_spends[p] / budget_cons, max_spends[p] / budget_cons) for p in plats_opt]
                     
+                    presupuesto_sobrante = budget_cons - suma_minimos
                     x0 = [(min_spends[p] + (presupuesto_sobrante / len(plats_opt))) / budget_cons for p in plats_opt]
                     
                     res = minimize(obj_cons, x0, method='SLSQP', bounds=bounds, constraints=[{'type': 'eq', 'fun': cons_cons}])
@@ -629,7 +635,14 @@ with tab_optimizer:
                             conv = hill(inv, params_clean[plat]['C'], params_clean[plat]['alpha'], params_clean[plat]['beta'], params_clean[plat]['scale']) if inv > 0 else 0
                             
                             min_req = min_spends[plat]
-                            nota = "🔒 Mínimo Forzado" if abs(inv - min_req) < 10 else "📈 Optimizado"
+                            max_req = max_spends[plat]
+                            
+                            if abs(inv - min_req) < 10:
+                                nota = "🔒 Mínimo Forzado"
+                            elif abs(inv - max_req) < 10:
+                                nota = "🔒 Máximo Forzado"
+                            else:
+                                nota = "📈 Optimizado"
                             
                             res_df.append({
                                 'Plataforma': plat, 
@@ -644,7 +657,7 @@ with tab_optimizer:
                         
                         render_optimizer_charts(df_result_cons)
                     else:
-                        st.error("El optimizador no pudo encontrar una solución.")
+                        st.error("❌ El optimizador no pudo encontrar una solución con los límites min/max proporcionados. Revisa que el presupuesto total quepa dentro de las restricciones.")
 
         elif escenario == "3. Búsqueda de Objetivo":
             st.subheader("Encuentra la ruta más barata para llegar a una meta, comparando escenarios con y sin Outliers.")
